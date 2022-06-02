@@ -1,0 +1,8 @@
+.idea
+__pycache__/
+*.py[cod]
+*$py.class
+dist
+*egg-info
+all.log
+th2_act_template/config
