@@ -99,7 +99,7 @@ def _create_no_party_ids_fields(no_party_ids: List[NoPartyIDs]) -> List[Dict[str
     ]
 
 
-def _create_non_typed_no_quote_qualifiers_fields(no_quote_qualifiers: List[Quote.QuoteQualifiers]) \
+def _create_non_typed_no_quote_qualifiers_fields(no_quote_qualifiers: List[Quote.QuoteQualifier]) \
         -> List[Dict[str, Any]]:
     return [
         {'QuoteQualifier': no_quote_qualifier.quote_qualifier}
