@@ -56,7 +56,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                     execution_report_filter: RequestStatus.SUCCESS,
                     business_reject_filter: RequestStatus.ERROR
                 },
-                timeout=5)
+                timeout=10)
 
         return PlaceMessageResponse(response_message=act_response.message,
                                     status=act_response.status,
