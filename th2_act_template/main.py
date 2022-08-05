@@ -16,7 +16,7 @@ import logging.config
 from pathlib import Path
 import sys
 
-from th2_act import Act, GRPCServer
+from th2_act import Act, ActServer
 from th2_common.schema.factory.common_factory import CommonFactory
 
 logger = logging.getLogger()
@@ -39,10 +39,10 @@ grpc_router = factory.grpc_router
 message_batch_router = factory.message_parsed_batch_router
 event_batch_router = factory.event_batch_router
 
-act = Act(grpc_router, message_batch_router, event_batch_router)
 grpc_server = grpc_router.server
+act = Act(grpc_router, message_batch_router, event_batch_router)
 
-GRPCServer = GRPCServer(grpc_server, act.handlers)
+GRPCServer = ActServer(grpc_server, act.handlers)
 
 sys.excepthook = shutdown_hook
 
