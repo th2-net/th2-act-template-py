@@ -14,13 +14,12 @@
 
 import logging
 
-from th2_act import HandlerAttributes, GrpcMethodAttributes, RequestProcessor
+from th2_act import GrpcMethodAttributes, HandlerAttributes, RequestProcessor
+import th2_act_template.custom.response_convertors as resp
 from th2_grpc_act_template import act_template_pb2_grpc
-from th2_grpc_act_template.act_template_pb2 import PlaceMessageMultipleResponse, PlaceMessageResponse, \
-    SendMessageResponse
+from th2_grpc_act_template.act_template_pb2 import PlaceMessageMultipleResponse, PlaceMessageRequest, \
+    PlaceMessageResponse, PlaceSecurityListResponse, SendMessageResponse
 from th2_grpc_common.common_pb2 import RequestStatus
-
-from th2_act_template.custom.response_convertors import create_security_list_response
 
 logger = logging.getLogger()
 
@@ -30,7 +29,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
     def __init__(self, act_attrs: HandlerAttributes):
         self.act_attrs = act_attrs
 
-    def placeOrderFIX(self, request, context):
+    def placeOrderFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         method_attrs = GrpcMethodAttributes(method_name='Place order FIX',
                                             request_event_id=request.parent_event_id,
                                             request_description=request.description,
@@ -67,7 +66,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
         return PlaceMessageResponse(checkpoint_id=act_response.checkpoint,
                                     status=act_response.status)
 
-    def sendMessage(self, request, context):
+    def sendMessage(self, request: PlaceMessageRequest, context) -> SendMessageResponse:
         act_parameters = GrpcMethodAttributes(method_name='Send message',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -79,7 +78,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
 
         return SendMessageResponse()
 
-    def placeQuoteRequestFIX(self, request, context):
+    def placeQuoteRequestFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place quote request FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -102,7 +101,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                                     status=act_response.status,
                                     checkpoint_id=act_response.checkpoint)
 
-    def placeQuoteFIX(self, request, context):
+    def placeQuoteFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageMultipleResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place quote FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -144,16 +143,19 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                 message_filters={quote_filter: RequestStatus.SUCCESS},
                 wait_time=5)
 
+        responses = []
+        if quote_status_report_act_response.message is not None:
+            responses.append(quote_status_report_act_response.message)
+        responses.extend(act_response.message for act_response in quote_act_responses
+                         if act_response.message is not None)
+
         return PlaceMessageMultipleResponse(
-            response_message=[
-                quote_status_report_act_response.message,
-                *[act_response.message for act_response in quote_act_responses]
-            ],
+            response_message=responses,
             checkpoint_id=quote_status_report_act_response.checkpoint,
             status=quote_status_report_act_response.status
         )
 
-    def placeOrderMassCancelRequestFIX(self, request, context):
+    def placeOrderMassCancelRequestFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place order mass cancel request FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -176,7 +178,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                                     status=act_response.status,
                                     checkpoint_id=act_response.checkpoint)
 
-    def placeQuoteCancelFIX(self, request, context):
+    def placeQuoteCancelFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place quote cancel FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -199,7 +201,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                                     status=act_response.status,
                                     checkpoint_id=act_response.checkpoint)
 
-    def placeQuoteResponseFIX(self, request, context):
+    def placeQuoteResponseFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place quote response FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -222,7 +224,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                                     status=act_response.status,
                                     checkpoint_id=act_response.checkpoint)
 
-    def placeSecurityListRequest(self, request, context):
+    def placeSecurityListRequest(self, request: PlaceMessageRequest, context) -> PlaceSecurityListResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place security list request',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -242,4 +244,8 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
             act_multi_response = rp.receive_all_before_matching(message_filters={message_filter: RequestStatus.SUCCESS},
                                                                 timeout=20)
 
-        return create_security_list_response(act_multi_response)
+        return PlaceSecurityListResponse(
+            securityListDictionary=resp.create_security_list_dictionary(act_multi_response.messages),
+            status=act_multi_response.status,
+            checkpoint_id=act_multi_response.checkpoint
+        )

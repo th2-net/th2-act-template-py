@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging.config
-from pathlib import Path
 import sys
 
 from th2_act import Act, ActServer

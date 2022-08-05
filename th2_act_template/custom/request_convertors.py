@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from th2_common_utils import dict_to_message
-from th2_grpc_act_template.act_template_typed_pb2 import PlaceMessageRequestTyped, Quote, NoPartyIDs
+from th2_grpc_act_template.act_template_typed_pb2 import NoPartyIDs, PlaceMessageRequestTyped, Quote
 from th2_grpc_common.common_pb2 import Message
 
 

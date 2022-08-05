@@ -14,14 +14,14 @@
 
 import logging
 
-from th2_act import RequestProcessor, HandlerAttributes, GrpcMethodAttributes
+from th2_act import GrpcMethodAttributes, HandlerAttributes, RequestProcessor
 from th2_act_template.custom import request_convertors as req
+import th2_act_template.custom.response_convertors as resp
 from th2_grpc_act_template import act_template_typed_pb2_grpc
 from th2_grpc_act_template.act_template_pb2 import PlaceSecurityListResponse, SendMessageResponse
-from th2_grpc_act_template.act_template_typed_pb2 import PlaceMessageMultiResponseTyped, PlaceMessageResponseTyped
+from th2_grpc_act_template.act_template_typed_pb2 import PlaceMessageMultiResponseTyped, PlaceMessageRequestTyped, \
+    PlaceMessageResponseTyped
 from th2_grpc_common.common_pb2 import RequestStatus
-
-import th2_act_template.custom.response_convertors as resp
 
 logger = logging.getLogger()
 
@@ -31,7 +31,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
     def __init__(self, act_attrs: HandlerAttributes):
         self.act_attrs = act_attrs
 
-    def placeOrderFIX(self, request, context):
+    def placeOrderFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         act_parameters = GrpcMethodAttributes(method_name='Place order FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -41,7 +41,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
         with RequestProcessor(self.act_attrs, act_parameters, prefilter=prefilter) as rp:
             request_msg = req.create_new_order_single(request)
-            rp.send(request_msg)
+            request_msg_sequence = rp.send(request_msg, echo_key_field='ClOrdID')
 
             execution_report_filter = lambda response_msg: (
                     response_msg['ClOrdID'] == request_msg['ClOrdID']
@@ -53,17 +53,22 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                     and response_msg.metadata.message_type == 'BusinessMessageReject'
             )
 
+            system_reject_filter = lambda response_msg: (
+                    response_msg['RefSeqNum'] == request_msg_sequence
+            )
+
             act_response = rp.receive_first_matching(
                 message_filters={
                     execution_report_filter: RequestStatus.SUCCESS,
-                    business_reject_filter: RequestStatus.ERROR
+                    business_reject_filter: RequestStatus.ERROR,
+                    system_reject_filter: RequestStatus.ERROR
                 }
             )
 
         return PlaceMessageResponseTyped(status=act_response.status,
                                          checkpoint_id=act_response.checkpoint)
 
-    def sendMessage(self, request, context):
+    def sendMessage(self, request: PlaceMessageRequestTyped, context) -> SendMessageResponse:
         act_parameters = GrpcMethodAttributes(method_name='Send message',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -75,7 +80,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
         return SendMessageResponse()
 
-    def placeQuoteRequestFIX(self, request, context):
+    def placeQuoteRequestFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         act_parameters = GrpcMethodAttributes(method_name='Place quote request FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -98,7 +103,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                          status=act_response.status,
                                          checkpoint_id=act_response.checkpoint)
 
-    def placeQuoteFIX(self, request, context):
+    def placeQuoteFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageMultiResponseTyped:
         act_parameters = GrpcMethodAttributes(method_name='Place quote FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -157,7 +162,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
         return PlaceMessageMultiResponseTyped(place_message_response_typed=[quote_status_report, *quotes])
 
-    def placeOrderMassCancelRequestFIX(self, request, context):
+    def placeOrderMassCancelRequestFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         act_parameters = GrpcMethodAttributes(method_name='Place order mass cancel request FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -180,7 +185,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                          status=act_response.status,
                                          checkpoint_id=act_response.checkpoint)
 
-    def placeQuoteCancelFIX(self, request, context):
+    def placeQuoteCancelFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         act_parameters = GrpcMethodAttributes(method_name='Place quote cancel FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -203,7 +208,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                          status=act_response.status,
                                          checkpoint_id=act_response.checkpoint)
 
-    def placeQuoteResponseFIX(self, request, context):
+    def placeQuoteResponseFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         act_parameters = GrpcMethodAttributes(method_name='Place quote response FIX',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
@@ -225,7 +230,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
         return PlaceMessageResponseTyped(status=act_response.status,
                                          checkpoint_id=act_response.checkpoint)
 
-    def placeSecurityListRequest(self, request, context):
+    def placeSecurityListRequest(self, request: PlaceMessageRequestTyped, context) -> PlaceSecurityListResponse:
         act_parameters = GrpcMethodAttributes(method_name='Place security list request',
                                               request_event_id=request.parent_event_id,
                                               request_description=request.description,
