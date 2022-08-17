@@ -66,8 +66,8 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                 },
                 timeout=10)
 
-        return PlaceMessageResponse(checkpoint_id=act_response.checkpoint,
-                                    status=act_response.status)
+            return PlaceMessageResponse(checkpoint_id=act_response.checkpoint,
+                                        status=act_response.status)
 
     def sendMessage(self, request: PlaceMessageRequest, context) -> SendMessageResponse:
         logger.debug(f'sendMessage received request: {MessageToString(request.message.metadata, as_one_line=True)}')
@@ -81,7 +81,7 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
             request_msg = request.message
             rp.send(request_msg)
 
-        return SendMessageResponse()
+            return SendMessageResponse()
 
     def placeQuoteRequestFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         logger.debug(f'placeQuoteRequestFIX received request: '
@@ -105,9 +105,9 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponse(response_message=act_response.message,
-                                    status=act_response.status,
-                                    checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponse(response_message=act_response.message,
+                                        status=act_response.status,
+                                        checkpoint_id=act_response.checkpoint)
 
     def placeQuoteFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageMultipleResponse:
         logger.debug(f'placeQuoteFIX received request: {MessageToString(request.message.metadata, as_one_line=True)}')
@@ -153,17 +153,17 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                 message_filters={quote_filter: RequestStatus.SUCCESS},
                 wait_time=5)
 
-        responses = []
-        if quote_status_report_act_response.message is not None:
-            responses.append(quote_status_report_act_response.message)
-        responses.extend(act_response.message for act_response in quote_act_responses
-                         if act_response.message is not None)
+            responses = []
+            if quote_status_report_act_response.message is not None:
+                responses.append(quote_status_report_act_response.message)
+            responses.extend(act_response.message for act_response in quote_act_responses
+                             if act_response.message is not None)
 
-        return PlaceMessageMultipleResponse(
-            response_message=responses,
-            checkpoint_id=quote_status_report_act_response.checkpoint,
-            status=quote_status_report_act_response.status
-        )
+            return PlaceMessageMultipleResponse(
+                response_message=responses,
+                checkpoint_id=quote_status_report_act_response.checkpoint,
+                status=quote_status_report_act_response.status
+            )
 
     def placeOrderMassCancelRequestFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         logger.debug(f'placeOrderMassCancelRequestFIX received request: '
@@ -187,9 +187,9 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponse(response_message=act_response.message,
-                                    status=act_response.status,
-                                    checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponse(response_message=act_response.message,
+                                        status=act_response.status,
+                                        checkpoint_id=act_response.checkpoint)
 
     def placeQuoteCancelFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         logger.debug(f'placeQuoteCancelFIX received request: '
@@ -213,9 +213,9 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponse(response_message=act_response.message,
-                                    status=act_response.status,
-                                    checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponse(response_message=act_response.message,
+                                        status=act_response.status,
+                                        checkpoint_id=act_response.checkpoint)
 
     def placeQuoteResponseFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
         logger.debug(f'placeQuoteResponseFIX received request: '
@@ -239,9 +239,9 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponse(response_message=act_response.message,
-                                    status=act_response.status,
-                                    checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponse(response_message=act_response.message,
+                                        status=act_response.status,
+                                        checkpoint_id=act_response.checkpoint)
 
     def placeSecurityListRequest(self, request: PlaceMessageRequest, context) -> PlaceSecurityListResponse:
         logger.debug(f'placeSecurityListRequest received request: '
@@ -266,8 +266,8 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
             act_multi_response = rp.receive_all_before_matching(message_filters={message_filter: RequestStatus.SUCCESS},
                                                                 timeout=20)
 
-        return PlaceSecurityListResponse(
-            securityListDictionary=resp.create_security_list_dictionary(act_multi_response.messages),
-            status=act_multi_response.status,
-            checkpoint_id=act_multi_response.checkpoint
-        )
+            return PlaceSecurityListResponse(
+                securityListDictionary=resp.create_security_list_dictionary(act_multi_response.messages),
+                status=act_multi_response.status,
+                checkpoint_id=act_multi_response.checkpoint
+            )

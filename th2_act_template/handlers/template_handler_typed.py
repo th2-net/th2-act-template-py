@@ -68,8 +68,8 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                 }
             )
 
-        return PlaceMessageResponseTyped(status=act_response.status,
-                                         checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponseTyped(status=act_response.status,
+                                             checkpoint_id=act_response.checkpoint)
 
     def sendMessage(self, request: PlaceMessageRequestTyped, context) -> SendMessageResponse:
         logger.debug(f'sendMessage received request: {MessageToString(request.metadata, as_one_line=True)}')
@@ -83,7 +83,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
             request_msg = req.create_message(request)
             rp.send(request_msg)
 
-        return SendMessageResponse()
+            return SendMessageResponse()
 
     def placeQuoteRequestFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         logger.debug(f'placeQuoteRequestFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
@@ -106,9 +106,9 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponseTyped(response_message=resp.create_quote_status_report(act_response.message),
-                                         status=act_response.status,
-                                         checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponseTyped(response_message=resp.create_quote_status_report(act_response.message),
+                                             status=act_response.status,
+                                             checkpoint_id=act_response.checkpoint)
 
     def placeQuoteFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageMultiResponseTyped:
         logger.debug(f'placeQuoteFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
@@ -154,22 +154,22 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                 wait_time=5
             )
 
-        quote_status_report = PlaceMessageResponseTyped(
-            response_message=resp.create_quote_status_report(quote_status_report_act_response.message),
-            status=quote_status_report_act_response.status,
-            checkpoint_id=quote_status_report_act_response.checkpoint
-        )
-
-        quotes = [
-            PlaceMessageResponseTyped(
-                response_message=resp.create_quote(response.message),
-                status=response.status,
-                checkpoint_id=response.checkpoint
+            quote_status_report = PlaceMessageResponseTyped(
+                response_message=resp.create_quote_status_report(quote_status_report_act_response.message),
+                status=quote_status_report_act_response.status,
+                checkpoint_id=quote_status_report_act_response.checkpoint
             )
-            for response in quote_act_responses
-        ]
 
-        return PlaceMessageMultiResponseTyped(place_message_response_typed=[quote_status_report, *quotes])
+            quotes = [
+                PlaceMessageResponseTyped(
+                    response_message=resp.create_quote(response.message),
+                    status=response.status,
+                    checkpoint_id=response.checkpoint
+                )
+                for response in quote_act_responses
+            ]
+
+            return PlaceMessageMultiResponseTyped(place_message_response_typed=[quote_status_report, *quotes])
 
     def placeOrderMassCancelRequestFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         logger.debug(f'placeOrderMassCancelRequestFIX received request: '
@@ -193,9 +193,11 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponseTyped(response_message=resp.create_order_mass_cancel_report(act_response.message),
-                                         status=act_response.status,
-                                         checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponseTyped(
+                response_message=resp.create_order_mass_cancel_report(act_response.message),
+                status=act_response.status,
+                checkpoint_id=act_response.checkpoint
+            )
 
     def placeQuoteCancelFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         logger.debug(f'placeQuoteCancelFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
@@ -218,9 +220,11 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponseTyped(response_message=resp.create_mass_quote_acknowledgement(act_response.message),
-                                         status=act_response.status,
-                                         checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponseTyped(
+                response_message=resp.create_mass_quote_acknowledgement(act_response.message),
+                status=act_response.status,
+                checkpoint_id=act_response.checkpoint
+            )
 
     def placeQuoteResponseFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
         logger.debug(f'placeQuoteResponseFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
@@ -243,8 +247,8 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
             act_response = rp.receive_first_matching(message_filters={message_filter: RequestStatus.SUCCESS})
 
-        return PlaceMessageResponseTyped(status=act_response.status,
-                                         checkpoint_id=act_response.checkpoint)
+            return PlaceMessageResponseTyped(status=act_response.status,
+                                             checkpoint_id=act_response.checkpoint)
 
     def placeSecurityListRequest(self, request: PlaceMessageRequestTyped, context) -> PlaceSecurityListResponse:
         logger.debug(f'placeSecurityListRequest received request: '
@@ -269,8 +273,8 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
             act_multi_response = rp.receive_all_before_matching(message_filters={message_filter: RequestStatus.SUCCESS},
                                                                 timeout=20)
 
-        return PlaceSecurityListResponse(
-            securityListDictionary=resp.create_security_list_dictionary(act_multi_response.messages),
-            status=act_multi_response.status,
-            checkpoint_id=act_multi_response.checkpoint
-        )
+            return PlaceSecurityListResponse(
+                securityListDictionary=resp.create_security_list_dictionary(act_multi_response.messages),
+                status=act_multi_response.status,
+                checkpoint_id=act_multi_response.checkpoint
+            )
