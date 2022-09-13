@@ -17,11 +17,34 @@ from typing import Dict, List
 from th2_act_core import ActMessage
 from th2_grpc_act_template.act_template_pb2 import Symbols
 from th2_grpc_act_template.act_template_typed_pb2 import MassQuoteAcknowledgement, NoPartyIDs, OrderMassCancelReport, \
-    Quote, QuoteStatusReport, ResponseMessageTyped, PlaceMessageResponseTyped
+    Quote, QuoteStatusReport, ResponseMessageTyped, PlaceMessageResponseTyped, ExecutionReport
 from th2_grpc_common.common_pb2 import Message, RequestStatus, Checkpoint
 
 
 # Non-typed messages to typed messages convertors
+
+def create_execution_report(message: Message) -> ResponseMessageTyped:
+    if message is not None:
+        return ResponseMessageTyped(
+            execution_report=ExecutionReport(
+                ord_type=message['OrdType'],
+                account_type=int(message['AccountType']),
+                order_capacity=message['OrderCapacity'],
+                cl_ord_id=message['ClOrdID'],
+                leaves_qty=float(message['LeavesQty']),
+                side=message['Side'],
+                cum_qty=float(message['CumQty']),
+                exec_type=message['ExecType'],
+                ord_status=message['OrdStatus'],
+                exec_id=message['ExecID'],
+                price=float(message['Price']),
+                order_id=message['OrderID'],
+                text=message['Text'],
+                time_in_force=message['TimeInForce'],
+                transact_time=message['TransactTime']
+            ))
+    return ResponseMessageTyped()
+
 
 def create_quote_status_report(message: Message) -> ResponseMessageTyped:
     if message is not None:

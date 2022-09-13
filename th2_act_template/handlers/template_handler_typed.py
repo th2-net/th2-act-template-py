@@ -79,9 +79,10 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
             # Form response for script
             # Status are taken from report and checkpoint is taken from RequestProcessor itself
-            # Message also can be taken from report, but remember that you need to convert it
+            # Message is also taken from report, but remember that you need to convert it
             # to ResponseMessageTyped object, if you want to put the message in PlaceMessageResponseTyped response
-            return PlaceMessageResponseTyped(status=RequestStatus(status=report.status),
+            return PlaceMessageResponseTyped(response_message=resp.create_execution_report(message=report.message),
+                                             status=RequestStatus(status=report.status),
                                              checkpoint_id=rp.checkpoint)
 
     def sendMessage(self, request: PlaceMessageRequestTyped, context) -> SendMessageResponse:

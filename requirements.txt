@@ -15,4 +15,4 @@
 
 --extra-index-url https://nexus.exactpro.com/repository/th2-pypi/simple/
 th2-act-core==1.0.0.dev3037836163
-th2-grpc-act-template==3.5.0.dev2789260759
+th2-grpc-act-template==3.5.0.dev3044362809
