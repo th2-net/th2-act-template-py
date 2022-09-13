@@ -36,7 +36,7 @@ def create_new_order_single(request_typed: PlaceMessageRequestTyped) -> Message:
                            fields={
                                'OrdType': message_typed.ord_type,
                                'AccountType': message_typed.account_type,
-                               'Country': 'USA',
+
                                'OrderCapacity': message_typed.order_capacity,
                                'OrderQty': message_typed.order_qty,
                                'DisplayQty': message_typed.display_qty,
@@ -49,11 +49,11 @@ def create_new_order_single(request_typed: PlaceMessageRequestTyped) -> Message:
                                'TradingParty': {
                                    'NoPartyIDs': _create_no_party_ids_fields(message_typed.trading_party.no_party_ids)
                                },
-                               'Instrument': {
-                                   'Symbol': 'qwerty',
-                                   'SecurityID': message_typed.security_id,
-                                   'SecurityIDSource': message_typed.security_id_source,
-                               }
+
+
+                               'SecurityID': message_typed.security_id,
+                               'SecurityIDSource': message_typed.security_id_source,
+
                            })
 
 
