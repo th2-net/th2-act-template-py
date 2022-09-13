@@ -15,8 +15,9 @@
 import logging.config
 import sys
 
-from th2_act import Act, ActServer
+from th2_act_core import Act, ActServer
 from th2_common.schema.factory.common_factory import CommonFactory
+from th2_grpc_check1.check1_service import Check1Service
 
 logger = logging.getLogger()
 
@@ -35,11 +36,14 @@ def shutdown_hook(type, value, traceback):  # noqa: A002
 factory = CommonFactory()
 
 grpc_router = factory.grpc_router
+check1_service = grpc_router.get_service(Check1Service)
 message_batch_router = factory.message_parsed_batch_router
 event_batch_router = factory.event_batch_router
 
 grpc_server = grpc_router.server
-act = Act(grpc_router, message_batch_router, event_batch_router)
+act = Act(check1_service=check1_service,
+          message_router=message_batch_router,
+          event_router=event_batch_router)
 
 GRPCServer = ActServer(grpc_server, act.handlers)
 

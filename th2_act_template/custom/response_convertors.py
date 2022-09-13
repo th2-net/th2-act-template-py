@@ -14,10 +14,11 @@
 
 from typing import Dict, List
 
+from th2_act_core import ActMessage
 from th2_grpc_act_template.act_template_pb2 import Symbols
 from th2_grpc_act_template.act_template_typed_pb2 import MassQuoteAcknowledgement, NoPartyIDs, OrderMassCancelReport, \
-    Quote, QuoteStatusReport, ResponseMessageTyped
-from th2_grpc_common.common_pb2 import Message
+    Quote, QuoteStatusReport, ResponseMessageTyped, PlaceMessageResponseTyped
+from th2_grpc_common.common_pb2 import Message, RequestStatus, Checkpoint
 
 
 # Non-typed messages to typed messages convertors
@@ -26,6 +27,15 @@ def create_quote_status_report(message: Message) -> ResponseMessageTyped:
     if message is not None:
         return ResponseMessageTyped(quote_status_report=QuoteStatusReport())
     return ResponseMessageTyped()
+
+
+def quote_status_repost_to_place_message_response(quote_status_report: ActMessage,
+                                                  checkpoint: Checkpoint) -> PlaceMessageResponseTyped:
+    return PlaceMessageResponseTyped(
+        response_message=create_quote_status_report(quote_status_report.message),
+        status=RequestStatus(status=quote_status_report.status),
+        checkpoint_id=checkpoint
+    )
 
 
 def create_quote(message: Message) -> ResponseMessageTyped:
@@ -52,6 +62,18 @@ def create_quote(message: Message) -> ResponseMessageTyped:
             )
         )
     return ResponseMessageTyped()
+
+
+def quotes_to_place_message_response(quotes: List[ActMessage],
+                                     checkpoint: Checkpoint) -> List[PlaceMessageResponseTyped]:
+    return [
+        PlaceMessageResponseTyped(
+            response_message=create_quote(quote.message),
+            status=RequestStatus(status=quote.status),
+            checkpoint_id=checkpoint
+        )
+        for quote in quotes
+    ]
 
 
 def _create_no_party_ids(message: Message) -> NoPartyIDs:
@@ -82,7 +104,7 @@ def create_mass_quote_acknowledgement(message: Message) -> ResponseMessageTyped:
     return ResponseMessageTyped()
 
 
-def create_security_list_dictionary(messages: List[Message]) -> Dict[int, Symbols]:
+def create_security_list_dictionary(messages: List[ActMessage]) -> Dict[int, Symbols]:
     """Creates dict
     {1: [symbol1, ... , symbol100],
      2: [symbol101, ... , symbol200],
@@ -92,7 +114,7 @@ def create_security_list_dictionary(messages: List[Message]) -> Dict[int, Symbol
     if messages is not None:
         symbols_list = []
         for response in messages:
-            for no_related_sym in response['NoRelatedSym']:
+            for no_related_sym in response.message['NoRelatedSym']:
                 symbols_list.append(no_related_sym['Symbol'])
 
         split_symbols_list = [Symbols(symbol=symbols_list[pos:pos + 100]) for pos in range(0, len(symbols_list), 100)]
