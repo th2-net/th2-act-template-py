@@ -17,10 +17,9 @@ from typing import List
 
 from google.protobuf.text_format import MessageToString
 from th2_act_core import GrpcMethodAttributes, HandlerAttributes, RequestProcessor, ActMessage
-import th2_act_template.custom.response_convertors as resp
 from th2_grpc_act_template import act_template_pb2_grpc
 from th2_grpc_act_template.act_template_pb2 import PlaceMessageMultipleResponse, PlaceMessageRequest, \
-    PlaceMessageResponse, PlaceSecurityListResponse, SendMessageResponse
+    PlaceMessageResponse, PlaceSecurityListResponse
 from th2_grpc_common.common_pb2 import RequestStatus, Message
 
 logger = logging.getLogger()
@@ -80,43 +79,6 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
             return PlaceMessageResponse(response_message=report.message,
                                         checkpoint_id=rp.checkpoint,
                                         status=RequestStatus(status=report.status))
-
-    def sendMessage(self, request: PlaceMessageRequest, context) -> SendMessageResponse:
-        logger.debug(f'sendMessage received request: {MessageToString(request.message.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Send message',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs) as rp:
-            request_msg: Message = request.message
-            rp.send(request_msg)
-
-            return SendMessageResponse()
-
-    def placeQuoteRequestFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
-        logger.debug(f'placeQuoteRequestFIX received request: '
-                     f'{MessageToString(request.message.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place quote request FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg = request.message
-            rp.send(request_msg)
-
-            quote_report_filter = lambda response_msg: \
-                response_msg['QuoteReqID'] == request_msg['QuoteReqID'] \
-                and response_msg.metadata.message_type == 'QuoteStatusReport'
-
-            report: ActMessage = rp.receive_first_matching(pass_on=quote_report_filter)
-
-            return PlaceMessageResponse(response_message=report.message,
-                                        status=RequestStatus(status=report.status),
-                                        checkpoint_id=rp.checkpoint)
 
     def placeQuoteFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageMultipleResponse:
         logger.debug(f'placeQuoteFIX received request: {MessageToString(request.message.metadata, as_one_line=True)}')
@@ -186,75 +148,6 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
                     status=RequestStatus(status=quote_status_report.status)
                 )
 
-    def placeOrderMassCancelRequestFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
-        logger.debug(f'placeOrderMassCancelRequestFIX received request: '
-                     f'{MessageToString(request.message.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place order mass cancel request FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = request.message
-            rp.send(request_msg)
-
-            order_mass_cancel_report_filter = lambda response_msg: \
-                response_msg['ClOrdID'] == request_msg['ClOrdID'] \
-                and response_msg.metadata.message_type == 'OrderMassCancelReport'
-
-            report: ActMessage = rp.receive_first_matching(pass_on=order_mass_cancel_report_filter)
-
-            return PlaceMessageResponse(response_message=report.message,
-                                        status=RequestStatus(status=report.status),
-                                        checkpoint_id=rp.checkpoint)
-
-    def placeQuoteCancelFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
-        logger.debug(f'placeQuoteCancelFIX received request: '
-                     f'{MessageToString(request.message.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place quote cancel FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = request.message
-            rp.send(request_msg)
-
-            mass_quote_ack_filter = lambda response_msg: \
-                response_msg['QuoteID'] == request_msg['QuoteMsgID'] \
-                and response_msg.metadata.message_type == 'MassQuoteAcknowledgement'
-
-            ack: ActMessage = rp.receive_first_matching(pass_on=mass_quote_ack_filter)
-
-            return PlaceMessageResponse(response_message=ack.message,
-                                        status=RequestStatus(status=ack.status),
-                                        checkpoint_id=rp.checkpoint)
-
-    def placeQuoteResponseFIX(self, request: PlaceMessageRequest, context) -> PlaceMessageResponse:
-        logger.debug(f'placeQuoteResponseFIX received request: '
-                     f'{MessageToString(request.message.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place quote response FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = request.message
-            rp.send(request_msg)
-
-            quote_report_filter = lambda response_msg: \
-                response_msg['RFQID'] == request_msg['RFQID'] \
-                and response_msg.metadata.message_type in ['ExecutionReport', 'QuoteStatusReport']
-
-            report: ActMessage = rp.receive_first_matching(pass_on=quote_report_filter)
-
-            return PlaceMessageResponse(response_message=report.message,
-                                        status=RequestStatus(status=report.status),
-                                        checkpoint_id=rp.checkpoint)
-
     def placeSecurityListRequest(self, request: PlaceMessageRequest, context) -> PlaceSecurityListResponse:
         logger.debug(f'placeSecurityListRequest received request: '
                      f'{MessageToString(request.message.metadata, as_one_line=True)}')
@@ -283,10 +176,11 @@ class ActHandler(act_template_pb2_grpc.ActServicer):
             # All matching messages before LastFragment message (remember that we prefiltered SecurityList already)
             security_list: List[ActMessage] = rp.receive_all_before_matching(pass_on=last_fragment_filter,
                                                                              timeout=20)
+            security_list_dict = {}  # FIXME: probably should use simple list instead of {index: value} dict
 
             # Form response for script
             return PlaceSecurityListResponse(
-                securityListDictionary=resp.create_security_list_dictionary(security_list),
+                securityListDictionary=security_list_dict,
                 status=RequestStatus(status=security_list[0].status),
                 checkpoint_id=rp.checkpoint
             )

@@ -17,12 +17,12 @@ from typing import List
 
 from google.protobuf.text_format import MessageToString
 from th2_act_core import GrpcMethodAttributes, HandlerAttributes, RequestProcessor, ActMessage
-from th2_act_template.custom import request_convertors as req
-import th2_act_template.custom.response_convertors as resp
+from th2_common_utils.converters.message_converters import dict_to_message
 from th2_grpc_act_template import act_template_typed_pb2_grpc
-from th2_grpc_act_template.act_template_pb2 import PlaceSecurityListResponse, SendMessageResponse
+from th2_grpc_act_template.act_template_pb2 import PlaceSecurityListResponse
 from th2_grpc_act_template.act_template_typed_pb2 import PlaceMessageMultiResponseTyped, PlaceMessageRequestTyped, \
-    PlaceMessageResponseTyped
+    PlaceMessageResponseTyped, NewOrderSingle, ResponseMessageTyped, ExecutionReport, Quote, QuoteStatusReport, \
+    NoPartyIDs
 from th2_grpc_common.common_pb2 import RequestStatus, Message
 
 logger = logging.getLogger()
@@ -48,8 +48,40 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
         # Start RequestProcessor context manager with the alias 'rp'
         with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            # Get th2-message from request, using custom converter method
-            request_msg: Message = req.create_new_order_single(request)
+            typed_msg: NewOrderSingle = request.message_typed.new_order_single
+            # Get th2-message from request
+            request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
+                                                   session_alias=request.metadata.id.connection_id.session_alias,
+                                                   message_type='NewOrderSingle',
+                                                   fields={
+                                                       'OrdType': typed_msg.ord_type,
+                                                       'AccountType': typed_msg.account_type,
+                                                       'Country': 'USA',
+                                                       'OrderCapacity': typed_msg.order_capacity,
+                                                       'OrderQty': typed_msg.order_qty,
+                                                       'DisplayQty': typed_msg.display_qty,
+                                                       'Price': typed_msg.price,
+                                                       'ClOrdID': typed_msg.cl_ord_id,
+                                                       'SecondaryClOrdID': typed_msg.secondary_cl_ord_id,
+                                                       'Side': typed_msg.side,
+                                                       'TimeInForce': typed_msg.time_in_force,
+                                                       'TransactTime': typed_msg.transact_time,
+                                                       'TradingParty': {
+                                                           'NoPartyIDs': [
+                                                               {
+                                                                   'PartyID': no_party_id.party_id,
+                                                                   'PartyIDSource': no_party_id.party_id_source,
+                                                                   'PartyRole': no_party_id.party_role
+                                                               }
+                                                               for no_party_id in typed_msg.trading_party.no_party_ids
+                                                           ]
+                                                       },
+                                                       'Instrument': {
+                                                           'Symbol': 'qwerty',
+                                                           'SecurityID': typed_msg.security_id,
+                                                           'SecurityIDSource': typed_msg.security_id_source,
+                                                       }
+                                                   })
             # Send th2-message and receive its echo as ActMessage
             request_msg_echo: ActMessage = rp.send(request_msg, echo_key_field='ClOrdID')
 
@@ -78,46 +110,36 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                                            timeout=10)
 
             # Form response for script
-            # Status are taken from report and checkpoint is taken from RequestProcessor itself
+            # Status is taken from report and checkpoint is taken from RequestProcessor itself
             # Message is also taken from report, but remember that you need to convert it
             # to ResponseMessageTyped object, if you want to put the message in PlaceMessageResponseTyped response
-            return PlaceMessageResponseTyped(response_message=resp.create_execution_report(message=report.message),
-                                             status=RequestStatus(status=report.status),
-                                             checkpoint_id=rp.checkpoint)
+            if report.message.metadata.message_type == 'ExecutionReport':
+                response_msg = ResponseMessageTyped(
+                    execution_report=ExecutionReport(
+                        ord_type=report.message['OrdType'],
+                        account_type=int(report.message['AccountType']),
+                        order_capacity=report.message['OrderCapacity'],
+                        cl_ord_id=report.message['ClOrdID'],
+                        leaves_qty=float(report.message['LeavesQty']),
+                        side=report.message['Side'],
+                        cum_qty=float(report.message['CumQty']),
+                        exec_type=report.message['ExecType'],
+                        ord_status=report.message['OrdStatus'],
+                        exec_id=report.message['ExecID'],
+                        price=float(report.message['Price']),
+                        order_id=report.message['OrderID'],
+                        text=report.message['Text'],
+                        time_in_force=report.message['TimeInForce'],
+                        transact_time=report.message['TransactTime']
+                    ))
+            elif report.message.metadata.message_type == 'BusinessMessageReject':
+                response_msg = ResponseMessageTyped()  # TODO
+            elif report.message.metadata.message_type == 'SystemReject':
+                response_msg = ResponseMessageTyped()  # TODO
+            else:
+                response_msg = ResponseMessageTyped()  # TODO
 
-    def sendMessage(self, request: PlaceMessageRequestTyped, context) -> SendMessageResponse:
-        logger.debug(f'sendMessage received request: {MessageToString(request.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Send message',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs) as rp:
-            request_msg: Message = req.create_message(request)
-            rp.send(request_msg)
-
-            return SendMessageResponse()
-
-    def placeQuoteRequestFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
-        logger.debug(f'placeQuoteRequestFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place quote request FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = req.create_message(request)
-            rp.send(request_msg)
-
-            quote_report_filter = lambda response_msg: \
-                response_msg['QuoteReqID'] == request_msg['QuoteReqID'] \
-                and response_msg.metadata.message_type == 'QuoteStatusReport'
-
-            report: ActMessage = rp.receive_first_matching(pass_on=quote_report_filter)
-
-            return PlaceMessageResponseTyped(response_message=resp.create_quote_status_report(report.message),
+            return PlaceMessageResponseTyped(response_message=response_msg,
                                              status=RequestStatus(status=report.status),
                                              checkpoint_id=rp.checkpoint)
 
@@ -132,10 +154,37 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
         # Start RequestProcessor context manager with the alias 'rp'
         with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            # Get th2-message from request, using custom converter method
-            request_msg: Message = req.create_quote(request)
-            # Send th2-message and receive its echo as ActMessage
-            request_msg_echo: ActMessage = rp.send(request_msg, echo_key_field='QuoteID')
+            typed_msg: Quote = request.message_typed.quote
+            # Get th2-message from request
+            request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
+                                                   session_alias=request.metadata.id.connection_id.session_alias,
+                                                   message_type=request.metadata.message_type,
+                                                   fields={
+                                                       'NoQuoteQualifiers': [
+                                                           {'QuoteQualifier': no_quote_qualifier.quote_qualifier}
+                                                           for no_quote_qualifier in typed_msg.no_quote_qualifiers
+                                                       ],
+                                                       'OfferPx': typed_msg.offer_px,
+                                                       'OfferSize': typed_msg.offer_size,
+                                                       'QuoteID': typed_msg.quote_id,
+                                                       'Symbol': typed_msg.symbol,
+                                                       'SecurityIDSource': typed_msg.security_id_source,
+                                                       'BidSize': typed_msg.bid_size,
+                                                       'BidPx': typed_msg.bid_px,
+                                                       'SecurityID': typed_msg.security_id,
+                                                       'NoPartyIDs': [
+                                                           {
+                                                               'PartyID': no_party_id.party_id,
+                                                               'PartyIDSource': no_party_id.party_id_source,
+                                                               'PartyRole': no_party_id.party_role
+                                                           }
+                                                           for no_party_id in typed_msg.no_party_ids
+                                                       ],
+                                                       'QuoteType': typed_msg.quote_type,
+                                                       'AccountType': typed_msg.account_type
+                                                   })
+            # Send th2-message
+            rp.send(request_msg)
 
             # Describe filters for QuoteStatusReport messages as lambdas
             quote_report_accepted_filter = lambda response_msg: \
@@ -148,23 +197,26 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                 and response_msg.metadata.message_type == 'QuoteStatusReport' \
                 and response_msg['QuoteStatus'] == '5'
 
-            # Describe filter for SystemReject message as lambda based on MsgSeqNum field of request echo message
-            system_reject_filter = lambda response_msg: \
-                response_msg['RefSeqNum'] == request_msg_echo.message['header']['MsgSeqNum']
-
             # First matching message from cache receiving (within 10s timeout)
             # If QuoteStatusReport with QuoteStatus == 0 is received, report has status RequestStatus.SUCCESS (pass_on)
-            # and RequestStatus.ERROR if QuoteStatus == 5 or SystemReject (fail_on)
+            # and RequestStatus.ERROR if QuoteStatus == 5 (fail_on)
             quote_status_report: ActMessage = rp.receive_first_matching(
                 pass_on=quote_report_accepted_filter,
-                fail_on=(quote_report_rejected_filter, system_reject_filter),
+                fail_on=quote_report_rejected_filter,
                 timeout=10
             )
 
-            # Form response for script, using custom converter method
-            place_message_response_report: PlaceMessageResponseTyped = \
-                resp.quote_status_repost_to_place_message_response(quote_status_report=quote_status_report,
-                                                                   checkpoint=rp.checkpoint)
+            # Form response for script
+            if quote_status_report.message is not None:
+                qsr_message = ResponseMessageTyped(quote_status_report=QuoteStatusReport())
+            else:
+                qsr_message = ResponseMessageTyped()
+
+            place_message_response_report: PlaceMessageResponseTyped = PlaceMessageResponseTyped(
+                response_message=qsr_message,
+                status=RequestStatus(status=quote_status_report.status),
+                checkpoint_id=rp.checkpoint
+            )
 
             # If QuoteStatusReport with ERROR status was received, stop placeQuoteFIX execution and
             # return response to script
@@ -185,82 +237,40 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                                                    wait_time=5)
 
                 # Form response of quotes for script, using custom converter method
-                place_message_response_quotes: List[PlaceMessageResponseTyped] = \
-                    resp.quotes_to_place_message_response(quotes=quotes, checkpoint=rp.checkpoint)
+                place_message_response_quotes: List[PlaceMessageResponseTyped] = [
+                    PlaceMessageResponseTyped(
+                        response_message=ResponseMessageTyped(
+                            quote=Quote(
+                                no_quote_qualifiers=[
+                                    Quote.QuoteQualifier(quote_qualifier=no_quote_qualifiers['QuoteQualifier'])
+                                    for no_quote_qualifiers in quote.message['NoQuoteQualifiers']
+                                ],
+                                offer_px=float(quote.message['OfferPx']),
+                                offer_size=float(quote.message['OfferSize']),
+                                quote_id=quote.message['QuoteID'],
+                                symbol=quote.message['Symbol'],
+                                security_id_source=quote.message['SecurityIDSource'],
+                                bid_size=quote.message['BidSize'],
+                                bid_px=float(quote.message['BidPx']),
+                                security_id=quote.message['SecurityID'],
+                                no_party_ids=[
+                                    NoPartyIDs(party_id=no_party_id['PartyID'],
+                                               party_id_source=no_party_id['PartyIDSource'],
+                                               party_role=int(no_party_id['PartyRole']))
+                                    for no_party_id in quote.message['NoPartyIDs']
+                                ],
+                                quote_type=int(quote.message['QuoteType'])
+                            )
+                        ),
+                        status=RequestStatus(status=quote.status),
+                        checkpoint_id=rp.checkpoint
+                    )
+                    for quote in quotes
+                ]
 
                 # Return response with QuoteStatusReport and quotes
                 return PlaceMessageMultiResponseTyped(
                     place_message_response_typed=[place_message_response_report, *place_message_response_quotes])
-
-    def placeOrderMassCancelRequestFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
-        logger.debug(f'placeOrderMassCancelRequestFIX received request: '
-                     f'{MessageToString(request.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place order mass cancel request FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = req.create_message(request)
-            rp.send(request_msg)
-
-            order_mass_cancel_report_filter = lambda response_msg: \
-                response_msg['ClOrdID'] == request_msg['ClOrdID'] \
-                and response_msg.metadata.message_type == 'OrderMassCancelReport'
-
-            report: ActMessage = rp.receive_first_matching(pass_on=order_mass_cancel_report_filter)
-
-            return PlaceMessageResponseTyped(
-                response_message=resp.create_order_mass_cancel_report(report.message),
-                status=RequestStatus(status=report.status),
-                checkpoint_id=rp.checkpoint
-            )
-
-    def placeQuoteCancelFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
-        logger.debug(f'placeQuoteCancelFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place quote cancel FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = req.create_message(request)
-            rp.send(request_msg)
-
-            mass_quote_ack_filter = lambda response_msg: \
-                response_msg['QuoteID'] == request_msg['QuoteMsgID'] \
-                and response_msg.metadata.message_type == 'MassQuoteAcknowledgement'
-
-            ack: ActMessage = rp.receive_first_matching(pass_on=mass_quote_ack_filter)
-
-            return PlaceMessageResponseTyped(
-                response_message=resp.create_mass_quote_acknowledgement(ack.message),
-                status=RequestStatus(status=ack.status),
-                checkpoint_id=rp.checkpoint
-            )
-
-    def placeQuoteResponseFIX(self, request: PlaceMessageRequestTyped, context) -> PlaceMessageResponseTyped:
-        logger.debug(f'placeQuoteResponseFIX received request: {MessageToString(request.metadata, as_one_line=True)}')
-
-        grpc_method_attrs = GrpcMethodAttributes(method_name='Place quote response FIX',
-                                                 request_event_id=request.parent_event_id,
-                                                 request_description=request.description,
-                                                 context=context)
-
-        with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            request_msg: Message = req.create_message(request)
-            rp.send(request_msg)
-
-            quote_report_filter = lambda response_msg: \
-                response_msg['RFQID'] == request_msg['RFQID'] \
-                and response_msg.metadata.message_type in {'ExecutionReport', 'QuoteStatusReport'}
-
-            report: ActMessage = rp.receive_first_matching(pass_on=quote_report_filter)
-
-            return PlaceMessageResponseTyped(status=RequestStatus(status=report.status),
-                                             checkpoint_id=rp.checkpoint)
 
     def placeSecurityListRequest(self, request: PlaceMessageRequestTyped, context) -> PlaceSecurityListResponse:
         logger.debug(f'placeSecurityListRequest received request: '
@@ -280,8 +290,15 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
 
         # Start RequestProcessor context manager with the alias 'rp'
         with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=prefilter) as rp:
+            typed_msg = request.message_typed.security_list_request
             # Get th2-message from request, using custom converter method
-            request_msg: Message = req.create_security_list_request(request)
+            request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
+                                                   session_alias=request.metadata.id.connection_id.session_alias,
+                                                   message_type=request.metadata.message_type,
+                                                   fields={
+                                                       'SecurityListRequestType': typed_msg.security_list_request_type,
+                                                       'SecurityReqID': typed_msg.security_req_id
+                                                   })
             rp.send(request_msg)  # Send message, no echo will be received
 
             # Describe filter for SecurityList message with LastFragment == true field as lambda
@@ -290,10 +307,11 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
             # All matching messages before LastFragment message (remember that we prefiltered SecurityList already)
             security_list: List[ActMessage] = rp.receive_all_before_matching(pass_on=last_fragment_filter,
                                                                              timeout=20)
+            # Form response for script
+            security_list_dict = {}  # FIXME: probably should use simple list instead of {index: value} dict
 
-            # Form response for script, using custom converter method
             return PlaceSecurityListResponse(
-                securityListDictionary=resp.create_security_list_dictionary(security_list),
+                securityListDictionary=security_list_dict,
                 status=RequestStatus(status=security_list[0].status),
                 checkpoint_id=rp.checkpoint
             )
