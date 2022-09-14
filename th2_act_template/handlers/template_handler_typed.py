@@ -46,42 +46,46 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                                  request_description=request.description,
                                                  context=context)
 
+        # Get th2-message from request
+        typed_msg: NewOrderSingle = request.message_typed.new_order_single
+        request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
+                                               session_alias=request.metadata.id.connection_id.session_alias,
+                                               message_type='NewOrderSingle',
+                                               fields={
+                                                   'OrdType': typed_msg.ord_type,
+                                                   'AccountType': typed_msg.account_type,
+                                                   'Country': 'USA',
+                                                   'OrderCapacity': typed_msg.order_capacity,
+                                                   'OrderQty': typed_msg.order_qty,
+                                                   'DisplayQty': typed_msg.display_qty,
+                                                   'Price': typed_msg.price,
+                                                   'ClOrdID': typed_msg.cl_ord_id,
+                                                   'SecondaryClOrdID': typed_msg.secondary_cl_ord_id,
+                                                   'Side': typed_msg.side,
+                                                   'TimeInForce': typed_msg.time_in_force,
+                                                   'TransactTime': typed_msg.transact_time,
+                                                   'TradingParty': {
+                                                       'NoPartyIDs': [
+                                                           {
+                                                               'PartyID': no_party_id.party_id,
+                                                               'PartyIDSource': no_party_id.party_id_source,
+                                                               'PartyRole': no_party_id.party_role
+                                                           }
+                                                           for no_party_id in typed_msg.trading_party.no_party_ids
+                                                       ]
+                                                   },
+                                                   'Instrument': {
+                                                       'Symbol': 'qwerty',
+                                                       'SecurityID': typed_msg.security_id,
+                                                       'SecurityIDSource': typed_msg.security_id_source,
+                                                   }
+                                               })
+
+        # Method to form response for script
+        create_response_message = lambda message: ResponseMessageTyped()  # TODO: fill in
+
         # Start RequestProcessor context manager with the alias 'rp'
         with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            typed_msg: NewOrderSingle = request.message_typed.new_order_single
-            # Get th2-message from request
-            request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
-                                                   session_alias=request.metadata.id.connection_id.session_alias,
-                                                   message_type='NewOrderSingle',
-                                                   fields={
-                                                       'OrdType': typed_msg.ord_type,
-                                                       'AccountType': typed_msg.account_type,
-                                                       'Country': 'USA',
-                                                       'OrderCapacity': typed_msg.order_capacity,
-                                                       'OrderQty': typed_msg.order_qty,
-                                                       'DisplayQty': typed_msg.display_qty,
-                                                       'Price': typed_msg.price,
-                                                       'ClOrdID': typed_msg.cl_ord_id,
-                                                       'SecondaryClOrdID': typed_msg.secondary_cl_ord_id,
-                                                       'Side': typed_msg.side,
-                                                       'TimeInForce': typed_msg.time_in_force,
-                                                       'TransactTime': typed_msg.transact_time,
-                                                       'TradingParty': {
-                                                           'NoPartyIDs': [
-                                                               {
-                                                                   'PartyID': no_party_id.party_id,
-                                                                   'PartyIDSource': no_party_id.party_id_source,
-                                                                   'PartyRole': no_party_id.party_role
-                                                               }
-                                                               for no_party_id in typed_msg.trading_party.no_party_ids
-                                                           ]
-                                                       },
-                                                       'Instrument': {
-                                                           'Symbol': 'qwerty',
-                                                           'SecurityID': typed_msg.security_id,
-                                                           'SecurityIDSource': typed_msg.security_id_source,
-                                                       }
-                                                   })
             # Send th2-message and receive its echo as ActMessage
             request_msg_echo: ActMessage = rp.send(request_msg, echo_key_field='ClOrdID')
 
@@ -109,37 +113,10 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                                            fail_on=(business_reject_filter, system_reject_filter),
                                                            timeout=10)
 
-            # Form response for script
             # Status is taken from report and checkpoint is taken from RequestProcessor itself
             # Message is also taken from report, but remember that you need to convert it
             # to ResponseMessageTyped object, if you want to put the message in PlaceMessageResponseTyped response
-            if report.message.metadata.message_type == 'ExecutionReport':
-                response_msg = ResponseMessageTyped(
-                    execution_report=ExecutionReport(
-                        ord_type=report.message['OrdType'],
-                        account_type=int(report.message['AccountType']),
-                        order_capacity=report.message['OrderCapacity'],
-                        cl_ord_id=report.message['ClOrdID'],
-                        leaves_qty=float(report.message['LeavesQty']),
-                        side=report.message['Side'],
-                        cum_qty=float(report.message['CumQty']),
-                        exec_type=report.message['ExecType'],
-                        ord_status=report.message['OrdStatus'],
-                        exec_id=report.message['ExecID'],
-                        price=float(report.message['Price']),
-                        order_id=report.message['OrderID'],
-                        text=report.message['Text'],
-                        time_in_force=report.message['TimeInForce'],
-                        transact_time=report.message['TransactTime']
-                    ))
-            elif report.message.metadata.message_type == 'BusinessMessageReject':
-                response_msg = ResponseMessageTyped()  # TODO
-            elif report.message.metadata.message_type == 'SystemReject':
-                response_msg = ResponseMessageTyped()  # TODO
-            else:
-                response_msg = ResponseMessageTyped()  # TODO
-
-            return PlaceMessageResponseTyped(response_message=response_msg,
+            return PlaceMessageResponseTyped(response_message=create_response_message(report),
                                              status=RequestStatus(status=report.status),
                                              checkpoint_id=rp.checkpoint)
 
@@ -152,37 +129,55 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                                  request_description=request.description,
                                                  context=context)
 
+        # Get th2-message from request
+        typed_msg: Quote = request.message_typed.quote
+        request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
+                                               session_alias=request.metadata.id.connection_id.session_alias,
+                                               message_type=request.metadata.message_type,
+                                               fields={
+                                                   'NoQuoteQualifiers': [
+                                                       {'QuoteQualifier': no_quote_qualifier.quote_qualifier}
+                                                       for no_quote_qualifier in typed_msg.no_quote_qualifiers
+                                                   ],
+                                                   'OfferPx': typed_msg.offer_px,
+                                                   'OfferSize': typed_msg.offer_size,
+                                                   'QuoteID': typed_msg.quote_id,
+                                                   'Symbol': typed_msg.symbol,
+                                                   'SecurityIDSource': typed_msg.security_id_source,
+                                                   'BidSize': typed_msg.bid_size,
+                                                   'BidPx': typed_msg.bid_px,
+                                                   'SecurityID': typed_msg.security_id,
+                                                   'NoPartyIDs': [
+                                                       {
+                                                           'PartyID': no_party_id.party_id,
+                                                           'PartyIDSource': no_party_id.party_id_source,
+                                                           'PartyRole': no_party_id.party_role
+                                                       }
+                                                       for no_party_id in typed_msg.no_party_ids
+                                                   ],
+                                                   'QuoteType': typed_msg.quote_type,
+                                                   'AccountType': typed_msg.account_type
+                                               })
+
+        # Method to form response for script
+        create_quote_status_report_message = lambda message: \
+            ResponseMessageTyped(quote_status_report=QuoteStatusReport()) \
+            if message is not None \
+            else ResponseMessageTyped()
+
+        # Method to form response of quotes for script
+        create_quote_message_list = lambda message_list: [
+            PlaceMessageResponseTyped(
+                response_message=ResponseMessageTyped(quote=Quote()),
+                status=RequestStatus(status=quote.status),
+                checkpoint_id=rp.checkpoint
+            )
+            for quote in quotes
+        ]
+
         # Start RequestProcessor context manager with the alias 'rp'
         with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=self.heartbeat_prefilter) as rp:
-            typed_msg: Quote = request.message_typed.quote
-            # Get th2-message from request
-            request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
-                                                   session_alias=request.metadata.id.connection_id.session_alias,
-                                                   message_type=request.metadata.message_type,
-                                                   fields={
-                                                       'NoQuoteQualifiers': [
-                                                           {'QuoteQualifier': no_quote_qualifier.quote_qualifier}
-                                                           for no_quote_qualifier in typed_msg.no_quote_qualifiers
-                                                       ],
-                                                       'OfferPx': typed_msg.offer_px,
-                                                       'OfferSize': typed_msg.offer_size,
-                                                       'QuoteID': typed_msg.quote_id,
-                                                       'Symbol': typed_msg.symbol,
-                                                       'SecurityIDSource': typed_msg.security_id_source,
-                                                       'BidSize': typed_msg.bid_size,
-                                                       'BidPx': typed_msg.bid_px,
-                                                       'SecurityID': typed_msg.security_id,
-                                                       'NoPartyIDs': [
-                                                           {
-                                                               'PartyID': no_party_id.party_id,
-                                                               'PartyIDSource': no_party_id.party_id_source,
-                                                               'PartyRole': no_party_id.party_role
-                                                           }
-                                                           for no_party_id in typed_msg.no_party_ids
-                                                       ],
-                                                       'QuoteType': typed_msg.quote_type,
-                                                       'AccountType': typed_msg.account_type
-                                                   })
+
             # Send th2-message
             rp.send(request_msg)
 
@@ -206,14 +201,8 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                 timeout=10
             )
 
-            # Form response for script
-            if quote_status_report.message is not None:
-                qsr_message = ResponseMessageTyped(quote_status_report=QuoteStatusReport())
-            else:
-                qsr_message = ResponseMessageTyped()
-
             place_message_response_report: PlaceMessageResponseTyped = PlaceMessageResponseTyped(
-                response_message=qsr_message,
+                response_message=create_quote_status_report_message(quote_status_report.message),
                 status=RequestStatus(status=quote_status_report.status),
                 checkpoint_id=rp.checkpoint
             )
@@ -237,37 +226,7 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
                                                                    wait_time=5)
 
                 # Form response of quotes for script, using custom converter method
-                place_message_response_quotes: List[PlaceMessageResponseTyped] = [
-                    PlaceMessageResponseTyped(
-                        response_message=ResponseMessageTyped(
-                            quote=Quote(
-                                no_quote_qualifiers=[
-                                    Quote.QuoteQualifier(quote_qualifier=no_quote_qualifiers['QuoteQualifier'])
-                                    for no_quote_qualifiers in quote.message['NoQuoteQualifiers']
-                                ],
-                                offer_px=float(quote.message['OfferPx']),
-                                offer_size=float(quote.message['OfferSize']),
-                                quote_id=quote.message['QuoteID'],
-                                symbol=quote.message['Symbol'],
-                                security_id_source=quote.message['SecurityIDSource'],
-                                bid_size=quote.message['BidSize'],
-                                bid_px=float(quote.message['BidPx']),
-                                security_id=quote.message['SecurityID'],
-                                no_party_ids=[
-                                    NoPartyIDs(party_id=no_party_id['PartyID'],
-                                               party_id_source=no_party_id['PartyIDSource'],
-                                               party_role=int(no_party_id['PartyRole']))
-                                    for no_party_id in quote.message['NoPartyIDs']
-                                ],
-                                quote_type=int(quote.message['QuoteType'])
-                            )
-                        ),
-                        status=RequestStatus(status=quote.status),
-                        checkpoint_id=rp.checkpoint
-                    )
-                    for quote in quotes
-                ]
-
+                place_message_response_quotes: List[PlaceMessageResponseTyped] = create_quote_message_list(quotes)
                 # Return response with QuoteStatusReport and quotes
                 return PlaceMessageMultiResponseTyped(
                     place_message_response_typed=[place_message_response_report, *place_message_response_quotes])
@@ -288,17 +247,22 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
             incoming_message.metadata.message_type == 'SecurityList' \
             and incoming_message['SecurityReqID'] == request.message_typed.security_list_request.security_req_id
 
+        # Get th2-message from request, using custom converter method
+        typed_msg = request.message_typed.security_list_request
+        request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
+                                               session_alias=request.metadata.id.connection_id.session_alias,
+                                               message_type=request.metadata.message_type,
+                                               fields={
+                                                   'SecurityListRequestType': typed_msg.security_list_request_type,
+                                                   'SecurityReqID': typed_msg.security_req_id
+                                               })
+
+        # Method to form response for script
+        # FIXME: probably should use simple list instead of {index: value} dict
+        create_security_list_dict = lambda message_list: {}
+
         # Start RequestProcessor context manager with the alias 'rp'
         with RequestProcessor(self.handler_attrs, grpc_method_attrs, prefilter=prefilter) as rp:
-            typed_msg = request.message_typed.security_list_request
-            # Get th2-message from request, using custom converter method
-            request_msg: Message = dict_to_message(parent_event_id=request.parent_event_id,
-                                                   session_alias=request.metadata.id.connection_id.session_alias,
-                                                   message_type=request.metadata.message_type,
-                                                   fields={
-                                                       'SecurityListRequestType': typed_msg.security_list_request_type,
-                                                       'SecurityReqID': typed_msg.security_req_id
-                                                   })
             rp.send(request_msg)  # Send message, no echo will be received
 
             # Describe filter for SecurityList message with LastFragment == true field as lambda
@@ -307,11 +271,9 @@ class ActHandler(act_template_typed_pb2_grpc.ActTypedServicer):
             # All matching messages before LastFragment message (remember that we prefiltered SecurityList already)
             security_list: List[ActMessage] = rp.receive_all_before_matching(pass_on=last_fragment_filter,
                                                                              timeout=20)
-            # Form response for script
-            security_list_dict = {}  # FIXME: probably should use simple list instead of {index: value} dict
 
             return PlaceSecurityListResponse(
-                securityListDictionary=security_list_dict,
+                securityListDictionary=create_security_list_dict(security_list),
                 status=RequestStatus(status=security_list[0].status),
                 checkpoint_id=rp.checkpoint
             )
